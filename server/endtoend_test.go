@@ -62,7 +62,7 @@ func (h *fakeHost) SetState(_ context.Context, _, _, key string, value map[strin
 	return nil
 }
 
-func (h *fakeHost) InvokeUtilityAgent(_ context.Context, prompt string) (string, error) {
+func (h *fakeHost) InvokeUtilityAgent(_ context.Context, prompt string, _ ...pluginsdk.UtilityAgentOptions) (string, error) {
 	h.mu.Lock()
 	h.prompts = append(h.prompts, prompt)
 	h.mu.Unlock()
