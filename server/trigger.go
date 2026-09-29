@@ -28,8 +28,9 @@ const baseTick = 5 * time.Second
 // guaranteed for every path, and a source that outlived its credentials would
 // keep talking to Slack with them.
 type supervisor struct {
-	host   func() pluginsdk.Host
-	runner *runner
+	host      func() pluginsdk.Host
+	runner    *runner
+	questions *questionBridge
 
 	scanNow chan struct{}
 
@@ -51,7 +52,12 @@ type supervisor struct {
 }
 
 func newSupervisor(host func() pluginsdk.Host) *supervisor {
-	return &supervisor{host: host, runner: newRunner(host), scanNow: make(chan struct{}, 1)}
+	return &supervisor{
+		host:      host,
+		runner:    newRunner(host),
+		questions: newQuestionBridge(host),
+		scanNow:   make(chan struct{}, 1),
+	}
 }
 
 // Run drives the supervisor until ctx is cancelled.
@@ -99,9 +105,11 @@ func (s *supervisor) tick(ctx context.Context, force bool) {
 	if cfg.Mode == authModeApp {
 		s.ensureSocket(ctx, cfg)
 		s.publishSocketStatus(ctx, host, cfg)
+		s.questions.Sync(ctx, cfg, cfg.Questions, cfg.QuestionsErr, force)
 		return
 	}
 	s.stopSource()
+	s.questions.Sync(ctx, nil, nil, cfg.QuestionsErr, force)
 	s.pollOnce(ctx, host, cfg, force)
 }
 
@@ -136,7 +144,8 @@ func (s *supervisor) ensureSocket(ctx context.Context, cfg *config) {
 			// status record by Handle itself.
 			_ = s.runner.Handle(reqCtx, cfg, req)
 		},
-		onState: s.noteSocketState,
+		onState:   s.noteSocketState,
+		questions: s.questions,
 	}
 	s.mu.Lock()
 	s.active = fingerprint

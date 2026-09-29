@@ -1,9 +1,9 @@
 id: "kandev-plugin-slack"
 api_version: 1
-min_kandev_version: "0.88.0"
-version: "0.2.0"
+min_kandev_version: "0.92.0"
+version: "0.2.0-fork.1"
 display_name: "Slack"
-description: "Turn Slack conversations into Kandev tasks. Mention @Kandev or run /kandev and a utility agent triages the thread into the right workspace, workflow and column, then replies in-thread."
+description: "Turn Slack conversations into Kandev tasks, and answer agent questions from Slack. Mention @Kandev or run /kandev and a utility agent triages the thread into the right workspace, workflow and column. Questions an agent asks are posted as a thread; your reply answers them."
 author: "kandev"
 categories: ["connector", "automation"]
 repo_url: "https://github.com/kdlbs/kandev-plugin-slack"
@@ -29,7 +29,9 @@ capabilities:
   agent_invoke: true
   # The triage prompt is built from the real Kandev topology so the agent
   # picks an existing workspace/workflow/column rather than inventing one.
-  api_read: ["workspaces", "workflows", "repositories"]
+  # Clarification threads read pending agent questions (interactions) and the
+  # asking task's title and workspace (tasks) to pick the channel.
+  api_read: ["workspaces", "workflows", "repositories", "tasks", "interactions"]
   api_write: ["tasks"]
 
 agent_tools:
@@ -133,6 +135,41 @@ config_schema:
       default: 30
       title: "Fallback: poll interval (seconds)"
       description: "Fallback only, between 5 and 600. A Slack app is event-driven and never polls."
+    questions_enabled:
+      type: boolean
+      default: false
+      title: "Clarification threads: post agent questions to Slack"
+      description: "When an agent asks you questions (ask_user_question_kandev), post them to Slack as a thread; a reply from an allowed user answers them and the agent resumes. Needs the Slack app (not the fallback), the message.channels/message.groups events and a Kandev URL."
+    kandev_url:
+      type: string
+      title: "Clarification threads: Kandev URL"
+      description: "Base URL the plugin sends answers to, from the machine Kandev runs on, e.g. http://127.0.0.1:3040. Answers go through POST /api/v1/clarification/<pending_id>/respond, the same path as the answer_question_kandev tool."
+    kandev_api_token:
+      type: string
+      secret: true
+      title: "Clarification threads: Kandev API token"
+      description: "A Kandev personal access token (kandev_pat_…) used to submit answers. Leave empty only when Kandev runs with authentication disabled. Answers are recorded as this token's user."
+    kandev_public_url:
+      type: string
+      title: "Clarification threads: public Kandev URL (optional)"
+      description: "When set, the task title in the Slack post links to <this URL>/t/<task id>. Use the address you open Kandev with from Slack, e.g. https://kandev.example.com."
+    questions_default_channel:
+      type: string
+      title: "Clarification threads: default channel"
+      description: "Channel id (C…) that receives questions from workspaces with no mapping below. Invite the bot there."
+    questions_channels:
+      type: string
+      title: "Clarification threads: workspace → channel"
+      description: "One workspace=channel pair per line or comma, where workspace is its id or name and channel is a channel id, e.g. Homelab=C0123456789."
+    questions_answerers:
+      type: string
+      title: "Clarification threads: allowed Slack users"
+      description: "Comma-separated Slack user ids (U…) whose thread replies answer questions. Replies from anyone else are ignored."
+    questions_poll_seconds:
+      type: integer
+      default: 10
+      title: "Clarification threads: check interval (seconds)"
+      description: "How often to look for new questions, between 3 and 300. Kandev has no event for a new question, so the plugin checks the pending list."
   required: ["utility_agent"]
 
 ui:

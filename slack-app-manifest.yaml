@@ -34,15 +34,18 @@ oauth_config:
       # Receive @Kandev mentions.
       - app_mentions:read
       # Read the surrounding thread, or the recent channel conversation when a
-      # mention is not threaded, for context. groups: covers private channels;
-      # drop it if the bot only ever works in public ones.
+      # mention is not threaded, for context. Also required for the
+      # message.channels / message.groups events that deliver replies to
+      # clarification threads. groups: covers private channels; drop it if
+      # the bot only ever works in public ones.
       - channels:history
       - groups:history
       # Post the triage reply.
       - chat:write
       # Open a direct message with one notification recipient.
       - im:write
-      # Add the :eyes: acknowledgement while triage runs.
+      # Add the :eyes: acknowledgement while triage runs, and the
+      # :white_check_mark: on a reply that answered an agent's questions.
       - reactions:write
       # Serve /kandev.
       - commands
@@ -51,6 +54,11 @@ settings:
   event_subscriptions:
     bot_events:
       - app_mention
+      # Replies in clarification threads (public / private channels). The
+      # plugin ignores every message that is not a reply in a thread it
+      # posted.
+      - message.channels
+      - message.groups
   interactivity:
     is_enabled: true
   socket_mode_enabled: true

@@ -1,7 +1,7 @@
 .PHONY: build run test fmt vet package package-host verify-package verify-package-host clean
 
 BIN := bin/kandev-plugin-slack
-VERSION := 0.2.0
+VERSION := 0.2.0-fork.1
 STAGE := .build/stage
 PKG_OUT := kandev-plugin-slack-$(VERSION).tar.gz
 KANDEV_BACKEND := ../kandev/apps/backend
@@ -76,6 +76,7 @@ test -f "$$VERIFY_DIR/assets/icon.svg"; \
 test -f "$$VERIFY_DIR/assets/NOTICE.md"; \
 test -f "$$VERIFY_DIR/README.md"; \
 test -f "$$VERIFY_DIR/docs/notifications.md"; \
+test -f "$$VERIFY_DIR/docs/clarification-threads.md"; \
 test -f "$$VERIFY_DIR/slack-app-manifest.yaml"; \
 test -f "$$VERIFY_DIR/ui/bundle.js"; \
 test -f "$$VERIFY_DIR/checksums.txt"; \

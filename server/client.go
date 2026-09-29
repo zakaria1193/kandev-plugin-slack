@@ -445,13 +445,32 @@ func (c *client) Permalink(ctx context.Context, channelID, ts string) (string, e
 
 // PostMessage posts a reply. A non-empty threadTS keeps it in-thread.
 func (c *client) PostMessage(ctx context.Context, channelID, threadTS, text string) error {
+	_, _, err := c.PostMessageTS(ctx, channelID, threadTS, text)
+	return err
+}
+
+// PostMessageTS posts like PostMessage and returns where the message landed:
+// Slack's channel id (a name in the request comes back as an id) and the
+// message ts, which is the thread_ts of any reply to it.
+func (c *client) PostMessageTS(ctx context.Context, channelID, threadTS, text string) (string, string, error) {
 	params := url.Values{}
 	params.Set("channel", channelID)
 	params.Set("text", text)
 	if threadTS != "" {
 		params.Set("thread_ts", threadTS)
 	}
-	return c.post(ctx, "chat.postMessage", params, nil)
+	var resp struct {
+		envelope
+		Channel string `json:"channel"`
+		TS      string `json:"ts"`
+	}
+	if err := c.post(ctx, "chat.postMessage", params, &resp); err != nil {
+		return "", "", err
+	}
+	if resp.Channel == "" {
+		resp.Channel = channelID
+	}
+	return resp.Channel, resp.TS, nil
 }
 
 // AddReaction adds an emoji reaction, given the bare name (no colons).

@@ -81,6 +81,12 @@ type config struct {
 
 	StartAgent   bool
 	UtilityAgent string
+
+	// Questions configures clarification threads; nil when they are off.
+	// QuestionsErr explains why they are on but cannot run. Neither blocks
+	// triage.
+	Questions    *questionsConfig
+	QuestionsErr error
 }
 
 // WebCredentials returns the (token, cookie) pair for Slack Web API calls.
@@ -126,6 +132,7 @@ func loadConfig(raw map[string]any) (*config, error) {
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
+	cfg.Questions, cfg.QuestionsErr = loadQuestionsConfig(raw, cfg.Mode)
 	return cfg, nil
 }
 

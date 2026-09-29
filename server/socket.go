@@ -58,6 +58,7 @@ type eventsAPIPayload struct {
 		ThreadTS string `json:"thread_ts"`
 		Channel  string `json:"channel"`
 		BotID    string `json:"bot_id"`
+		Subtype  string `json:"subtype"`
 	} `json:"event"`
 }
 
@@ -116,6 +117,10 @@ type socketListener struct {
 	// botUserID is the app's own user id, used to strip the leading mention
 	// from `@Kandev do the thing` and to ignore the app's own messages.
 	botUserID string
+	// questions receives replies in clarification threads. Nil when
+	// clarification threads are off; then thread messages are ignored and
+	// every mention is triaged as before.
+	questions threadRouter
 }
 
 // Run keeps a connection open until ctx is cancelled, redialling with backoff.
@@ -237,11 +242,56 @@ func (l *socketListener) ack(conn *websocket.Conn, envelopeID string) {
 // dispatch turns a frame into an inboundRequest and hands it off. Processing
 // runs in its own goroutine so the read loop stays responsive to the next ack.
 func (l *socketListener) dispatch(ctx context.Context, env socketEnvelope) {
+	if env.Type == "events_api" {
+		if msg, ok := l.decodeThreadMessage(env.Payload); ok {
+			if l.questions != nil {
+				go l.questions.HandleThreadReply(ctx, msg)
+			}
+			return
+		}
+	}
 	req, ok := l.decode(env)
 	if !ok {
 		return
 	}
+	if l.questions != nil && req.ThreadTS != "" && req.ThreadTS != req.TS {
+		// "@Kandev <answer>" inside a clarification thread is an answer, not
+		// a new request. The same reply may also arrive as a message event;
+		// the bridge answers it once.
+		go func() {
+			if l.questions.OwnsThread(ctx, req.ChannelID, req.ThreadTS) {
+				l.questions.HandleThreadReply(ctx, threadMessage{
+					Channel: req.ChannelID, TS: req.TS, ThreadTS: req.ThreadTS,
+					User: req.UserID, Text: req.Instruction,
+				})
+				return
+			}
+			l.handle(ctx, req)
+		}()
+		return
+	}
 	go l.handle(ctx, req)
+}
+
+// decodeThreadMessage picks out a person's reply inside a thread, delivered
+// by the message.channels / message.groups subscriptions. Edits, joins, bot
+// posts (including this app's own), and thread parents are skipped.
+func (l *socketListener) decodeThreadMessage(payload json.RawMessage) (threadMessage, bool) {
+	var p eventsAPIPayload
+	if err := json.Unmarshal(payload, &p); err != nil {
+		return threadMessage{}, false
+	}
+	e := p.Event
+	if e.Type != "message" || e.Subtype != "" || e.BotID != "" {
+		return threadMessage{}, false
+	}
+	if e.ThreadTS == "" || e.ThreadTS == e.TS || e.User == "" {
+		return threadMessage{}, false
+	}
+	if l.botUserID != "" && e.User == l.botUserID {
+		return threadMessage{}, false
+	}
+	return threadMessage{Channel: e.Channel, TS: e.TS, ThreadTS: e.ThreadTS, User: e.User, Text: e.Text}, true
 }
 
 func (l *socketListener) decode(env socketEnvelope) (inboundRequest, bool) {

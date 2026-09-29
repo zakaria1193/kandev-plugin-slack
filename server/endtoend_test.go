@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -142,6 +143,12 @@ type stubSlack struct {
 	mu    sync.Mutex
 	calls map[string]int
 	posts []string
+	// postRecords and reactions keep where each post and reaction went, for
+	// the clarification-thread tests.
+	postRecords []postedMessage
+	reactions   []postedMessage
+	// postError, when set, makes chat.postMessage fail with that Slack code.
+	postError string
 	// commandResponses records bodies delivered to a slash command's
 	// response_url, which is a different route from chat.postMessage.
 	commandResponses []string
@@ -165,8 +172,20 @@ func newStubSlack(t *testing.T, searchBody string) *stubSlack {
 		_ = r.ParseForm()
 		s.mu.Lock()
 		s.calls[method]++
-		if method == "chat.postMessage" {
+		postTS := ""
+		postError := s.postError
+		if method == "chat.postMessage" && postError == "" {
 			s.posts = append(s.posts, r.PostForm.Get("text"))
+			postTS = fmt.Sprintf("100.%06d", len(s.posts))
+			s.postRecords = append(s.postRecords, postedMessage{
+				Channel: r.PostForm.Get("channel"), ThreadTS: r.PostForm.Get("thread_ts"),
+				Text: r.PostForm.Get("text"), TS: postTS,
+			})
+		}
+		if method == "reactions.add" {
+			s.reactions = append(s.reactions, postedMessage{
+				Channel: r.PostForm.Get("channel"), TS: r.PostForm.Get("timestamp"), Text: r.PostForm.Get("name"),
+			})
 		}
 		body := s.searchBody
 		s.mu.Unlock()
@@ -179,6 +198,12 @@ func newStubSlack(t *testing.T, searchBody string) *stubSlack {
 			_, _ = w.Write([]byte(body))
 		case "conversations.replies", "conversations.history":
 			_, _ = w.Write([]byte(`{"ok":true,"messages":[{"ts":"2.0","user":"U1","text":"!kandev fix sso"}]}`))
+		case "chat.postMessage":
+			if postError != "" {
+				_, _ = fmt.Fprintf(w, `{"ok":false,"error":%q}`, postError)
+				return
+			}
+			_, _ = fmt.Fprintf(w, `{"ok":true,"channel":%q,"ts":%q}`, r.PostForm.Get("channel"), postTS)
 		case "chat.getPermalink":
 			_, _ = w.Write([]byte(`{"ok":true,"permalink":"https://acme.slack.com/p2"}`))
 		default:

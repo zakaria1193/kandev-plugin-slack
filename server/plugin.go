@@ -94,6 +94,7 @@ func (p *slackPlugin) handleStatus(ctx context.Context) (*pluginsdk.WebhookRespo
 		"scannedAt":  st.ScannedAt,
 		"triaged":    st.Triaged,
 		"recent":     st.Recent,
+		"questions":  readQuestionStatus(ctx, host),
 	}
 	if cfg, err := p.currentConfig(ctx, host); err == nil {
 		payload["startAgent"] = cfg.StartAgent
