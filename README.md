@@ -1,6 +1,7 @@
 # kandev-plugin-slack
 
-Turn Slack conversations into Kandev tasks.
+Turn Slack conversations into Kandev tasks, and answer agent questions from
+Slack.
 
 Mention the bot or run the slash command, and the plugin reads the surrounding
 thread, asks your triage agent which workspace, workflow and column the work
@@ -100,6 +101,7 @@ lose real-time events.
 | Start agent on the new task | Off by default; the task lands on the board. |
 | Fallback: session token / `d` cookie | Secret. Only for workspaces that forbid apps. |
 | Fallback: command prefix / channels / poll interval | Fallback only; ignored by the app path. |
+| Clarification threads: … | Off by default. See [Clarification threads](docs/clarification-threads.md). |
 
 ## Task notifications
 
@@ -107,6 +109,15 @@ Task and automation agents can call `notify_user` to send one Slack DM through
 the existing bot. The tool requires Kandev 0.88.0 and the additional `im:write`
 bot scope. It stores notification keys across restarts and upgrades.
 See [Task notifications](docs/notifications.md) for arguments, results, and retry limits.
+
+## Clarification threads
+
+When an agent asks you questions (`ask_user_question_kandev`), the plugin can
+post them to a Slack channel as a thread. A reply from an allowed user answers
+them and the agent resumes. Pick a channel per workspace, or one default
+channel. This needs the Slack app, the `message.channels` / `message.groups`
+events, and a Kandev URL (plus a personal access token when Kandev has
+authentication on). See [Clarification threads](docs/clarification-threads.md).
 
 ## How triage works
 
